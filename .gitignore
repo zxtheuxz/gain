@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.db
+b3_history.db
+data/
+reports/
+.tmp-tests/
+.claude/
+monitor-web/node_modules/
+monitor-web/dist/
