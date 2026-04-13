@@ -46,6 +46,50 @@ python -m b3_patterns asset-monitor-export
 cd monitor-web && npm install && npm run dev
 ```
 
+### Fresh Clone / VPS Bootstrap
+
+Important: Git does **not** contain the full local working folder. The repository intentionally excludes generated/heavy/local artifacts:
+
+- `b3_history.db` (local SQLite database, ~559 MB on the original machine)
+- `data/` (downloaded COTAHIST ZIP/TXT files)
+- `reports/` (generated CSV/Markdown/log outputs)
+- `.claude/`, `.pytest_cache/`, `.tmp-tests/`, `__pycache__/`
+- `monitor-web/node_modules/` and `monitor-web/dist/`
+
+After `git clone`, the VPS will have the source code, docs, tests, frontend source, and lockfiles, but it will **not** have a ready `b3_history.db`. Recreate it on the VPS from external sources:
+
+```bash
+# Clone private GitHub repo (requires GitHub auth/token if prompted)
+git clone https://github.com/zxtheuxz/gain.git
+cd gain
+
+# Python environment
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# Create/populate b3_history.db with Yahoo Finance price history
+python -m b3_patterns sync
+
+# Optional but required for options/COTAHIST workflows:
+# downloads COTAHIST into data/cotahist/ and imports spot/options into the same SQLite DB
+python -m b3_patterns options-sync --years 2025 2026
+```
+
+If the exact original database is required byte-for-byte, do **not** expect Git to provide it. Copy `b3_history.db` separately, or use Git LFS/object storage. The normal VPS path is to regenerate it with `sync` and `options-sync`.
+
+When the user says **"Estou na VPS"**, assume the goal is to continue deployment from a fresh or partially prepared VPS. First inspect the VPS state, then continue:
+
+```bash
+pwd
+git status --short --branch
+python --version || python3 --version
+test -f b3_history.db && ls -lh b3_history.db || echo "b3_history.db missing"
+```
+
+If `b3_history.db` is missing, recreate it with the sync commands above before running discovery/backtests/monitor exports. Do not assume local artifacts from `E:\gain` were cloned.
+
 ### VPS Deployment (Ubuntu, 8 vCPU, 124 GB RAM)
 
 For heavy R3 discovery with full 3-factor expansion:
