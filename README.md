@@ -4,7 +4,7 @@ Implementacao inicial do projeto descrito em `decisao-stack-app-mobile.md`.
 
 ## O que esta pronto
 
-- Carga de tickers a partir de `acoes-listadas-b3.csv`
+- Carga de tickers a partir do universo operacional em `lista.md`
 - Normalizacao automatica para o sufixo `.SA`
 - Sincronizacao do historico local em SQLite (`b3_history.db`)
 - Uso de `Adj Close` para a analise de gatilhos e desfechos
@@ -40,7 +40,7 @@ python -m pip install -r requirements.txt
 Sincronizar o banco local:
 
 ```bash
-python -m b3_patterns sync
+python -m b3_patterns sync --tickers-file lista.md
 ```
 
 Rodar a analise apenas com dados locais:
@@ -58,7 +58,7 @@ python -m b3_patterns strategies --levels 1 2 3 4 5 --output-csv reports/strateg
 Importar o COTAHIST da B3 para opcoes:
 
 ```bash
-python -m b3_patterns options-sync --years 2025 2026
+python -m b3_patterns options-sync --tickers-file lista.md --years 2025 2026
 ```
 
 Rodar o backtest de opcoes ATM no ultimo ano:

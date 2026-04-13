@@ -22,10 +22,10 @@ python -m pytest tests/test_asset_discovery_round1.py -v
 python -m pytest tests/test_analysis.py::AnalysisTest::test_analyze_patterns -v
 
 # Sync price history from Yahoo Finance
-python -m b3_patterns sync
+python -m b3_patterns sync --tickers-file lista.md
 
 # Import B3 COTAHIST official data
-python -m b3_patterns options-sync --years 2025 2026
+python -m b3_patterns options-sync --tickers-file lista.md --years 2025 2026
 
 # Full analysis pipeline
 python -m b3_patterns run --output-csv reports/ranking.csv
@@ -70,14 +70,16 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 # Create/populate b3_history.db with Yahoo Finance price history
-python -m b3_patterns sync
+python -m b3_patterns sync --tickers-file lista.md
 
 # Optional but required for options/COTAHIST workflows:
 # downloads COTAHIST into data/cotahist/ and imports spot/options into the same SQLite DB
-python -m b3_patterns options-sync --years 2025 2026
+python -m b3_patterns options-sync --tickers-file lista.md --years 2025 2026
 ```
 
 If the exact original database is required byte-for-byte, do **not** expect Git to provide it. Copy `b3_history.db` separately, or use Git LFS/object storage. The normal VPS path is to regenerate it with `sync` and `options-sync`.
+
+Stock universe rule: always use `lista.md` as the operational stock universe for this project. Do not use `acoes-listadas-b3.csv` for sync, options, discovery, backtests, or monitor exports unless the user explicitly asks for that broader file. The CLI default is `lista.md`, but pass `--tickers-file lista.md` in manual commands when clarity matters.
 
 When the user says **"Estou na VPS"**, assume the goal is to continue deployment from a fresh or partially prepared VPS. First inspect the VPS state, then continue:
 
@@ -177,7 +179,8 @@ React 18 + Vite app in `monitor-web/`. Reads `public/data/asset-monitor.json` (g
 - Exit modes: `percent` (fixed take-profit/stop-loss %), `atr` (ATR-multiple based).
 - Exit reason values: `take_profit`, `stop_loss`, `stop_loss_trailing`, `time_cap`.
 - Ticker normalization: `.SA` suffix for Yahoo Finance compatibility.
-- Tickers loaded from CSV (`Ticker` column) or Markdown/TXT files.
+- Stock universe: always use `lista.md` unless the user explicitly asks for a different ticker file.
+- Ticker files may be Markdown/TXT lists or CSV files with a `Ticker` column.
 - Registry prevents re-testing known codes unless `--include-known` is passed.
 
 ## Testing

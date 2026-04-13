@@ -69,6 +69,9 @@ from .reporting import (
 from .tickers import load_tickers
 
 
+DEFAULT_TICKERS_FILE = "lista.md"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="b3_patterns",
@@ -174,8 +177,8 @@ def _add_db_argument(parser: argparse.ArgumentParser) -> None:
 def _add_sync_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com a coluna Ticker.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--window-days",
@@ -193,7 +196,7 @@ def _add_sync_arguments(parser: argparse.ArgumentParser) -> None:
         "--limit",
         type=int,
         default=None,
-        help="Limita a quantidade de tickers carregados do CSV.",
+        help="Limita a quantidade de tickers carregados do arquivo.",
     )
 
 
@@ -347,8 +350,8 @@ def _add_strategy_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_options_sync_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes para mapear opcoes.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes para mapear opcoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--years",
@@ -378,8 +381,8 @@ def _add_options_sync_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_options_backtest_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes para mapear opcoes.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes para mapear opcoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--start-date",
@@ -502,8 +505,8 @@ def _add_options_backtest_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_options_discovery_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes para mapear opcoes.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes para mapear opcoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--start-date",
@@ -662,8 +665,8 @@ def _add_options_discovery_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_options_discovery_refine_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes para mapear opcoes.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes para mapear opcoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--start-date",
@@ -859,8 +862,8 @@ def _add_options_discovery_refine_arguments(parser: argparse.ArgumentParser) -> 
 def _add_asset_discovery_round1_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes da rodada 1.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes da rodada 1. Padrao: lista.md.",
     )
     parser.add_argument(
         "--start-date",
@@ -1042,8 +1045,8 @@ def _add_asset_discovery_round1_arguments(parser: argparse.ArgumentParser) -> No
 def _add_asset_discovery_r3_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="acoes-listadas-b3.csv",
-        help="CSV com o universo de acoes.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes. Padrao: lista.md.",
     )
     parser.add_argument(
         "--start-date",
@@ -1269,8 +1272,8 @@ def _add_asset_discovery_r3_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_asset_monitor_export_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tickers-file",
-        default="lista.md",
-        help="CSV com o universo de acoes monitoradas.",
+        default=DEFAULT_TICKERS_FILE,
+        help="Arquivo Markdown/TXT/CSV com o universo operacional de acoes monitoradas. Padrao: lista.md.",
     )
     parser.add_argument(
         "--strategies-csv",
