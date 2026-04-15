@@ -1,0 +1,6 @@
+ticker,signals,entry_rule,action_label,operational_score,best_strategy_label
+LREN3,6,open,Comprar,483.1191,"Discovery Acao: compra no open, alvo +4% / stop -4% / cap 10D | Gap vs ATR14: levemente abaixo; Fechamento vs EMA9: acima leve; Retorno 1D normalizado por ATR: perto do normal"
+CURY3,5,close,Comprar,492.3362,"Discovery Acao: compra no close, alvo +4% / stop -4% / cap 10D | Fechamento vs MM50: abaixo leve; Compressao 3D vs 20D: alto; Fechamento vs EMA21: perto do equilibrio"
+VAMO3,5,open,Comprar,471.0070,"Discovery Acao: compra no open, alvo +4% / stop -4% / cap 10D | Retorno acumulado 1D: neutro; Gap vs ATR14: levemente abaixo; Fechamento vs EMA9: acima leve"
+MGLU3,3,close,Comprar,449.4448,"Discovery Acao: compra no close, alvo +4% / stop -4% / cap 10D | Fechamento vs MM50: abaixo leve; Posicao no range 20D: fechou no meio; Retorno 5D normalizado por ATR: levemente acima"
+BBSE3,3,close,Comprar,402.3782,"Discovery Acao: compra no close, alvo +3% / stop -4% / cap 10D | Retorno acumulado 20D: alta de 1% a 3%; Inclinacao da MM50 em 10D: perto do equilibrio; Posicao nas Bandas de Bollinger 20D: fechou perto da maxima"

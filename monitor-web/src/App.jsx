@@ -54,13 +54,13 @@ function StrategyBadge({ signal }) {
 }
 
 function getConfidenceLabel(signal) {
+  if (signal.is_operational_ticker) {
+    return "Confluência";
+  }
   if (signal.is_qualified_ticker) {
-    return "Prioridade";
+    return "Histórico no ticker";
   }
-  if (signal.strategy_metrics.profit_factor >= 2.5 && signal.strategy_metrics.average_trade_return_pct >= 1.3) {
-    return "Forte";
-  }
-  return "Observacao";
+  return "Acionou";
 }
 
 function getWinRate(metrics) {
@@ -70,6 +70,7 @@ function getWinRate(metrics) {
 function getSignalScore(signal) {
   const tickerMetrics = signal.ticker_metrics ?? {};
   return (
+    Number(signal.ticker_signal_count ?? 0) * 50 +
     Number(tickerMetrics.average_trade_return_pct ?? 0) * 100 +
     Number(getWinRate(tickerMetrics) ?? 0) * 2 +
     Math.min(Number(tickerMetrics.profit_factor ?? 0), 20) * 5 +
@@ -84,7 +85,7 @@ function App() {
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [showQualifiedOnly, setShowQualifiedOnly] = useState(true);
+  const [showOperationalOnly, setShowOperationalOnly] = useState(true);
   const [entryFilter, setEntryFilter] = useState("all");
 
   useEffect(() => {
@@ -124,7 +125,7 @@ function App() {
       return [];
     }
     return payload.signals.filter((signal) => {
-      if (showQualifiedOnly && !signal.is_qualified_ticker) {
+      if (showOperationalOnly && !signal.is_operational_ticker) {
         return false;
       }
       if (entryFilter !== "all" && signal.entry_rule !== entryFilter) {
@@ -143,7 +144,7 @@ function App() {
         .toLowerCase();
       return haystack.includes(search.toLowerCase());
     });
-  }, [entryFilter, payload, search, showQualifiedOnly]);
+  }, [entryFilter, payload, search, showOperationalOnly]);
 
   const topStrategies = useMemo(() => {
     if (!payload) {
@@ -157,7 +158,7 @@ function App() {
       return [];
     }
     const grouped = new Map();
-    for (const signal of payload.signals.filter((item) => item.is_qualified_ticker)) {
+    for (const signal of payload.signals.filter((item) => item.is_operational_ticker)) {
       const existing = grouped.get(signal.ticker);
       const score = getSignalScore(signal);
       if (!existing || score > existing.score) {
@@ -210,9 +211,8 @@ function App() {
           <p className="hero-eyebrow">Monitor Quantitativo B3</p>
           <h1>Identifique rapidamente quando as estratégias finais forem acionadas.</h1>
           <p className="hero-copy">
-            Este painel acompanha as melhores estratégias elite com lucro médio mínimo de 1% por trade.
-            O app lê o JSON exportado do projeto Python e mostra, por papel, quando o estado estatístico do mercado
-            voltou a aparecer.
+            Este painel acompanha as estratégias elite e destaca os papéis com confluência, quando mais de uma
+            estratégia forte acionou no mesmo pregão.
           </p>
         </div>
         <div className="hero-panel">
@@ -235,13 +235,13 @@ function App() {
         <KpiCard
           eyebrow="Sinais encontrados"
           value={formatNumber(payload.signals_triggered)}
-          note="Ocorrências atuais em todo o universo"
+          note="Acionamentos das estratégias elite"
           accent="sage"
         />
         <KpiCard
-          eyebrow="Sinais em ações qualificadas"
-          value={formatNumber(payload.signals_triggered_qualified)}
-          note="Papéis que também passaram no corte por ação"
+          eyebrow="Papéis com confluência"
+          value={formatNumber(payload.operational_tickers ?? 0)}
+          note={`${formatNumber(payload.operational_min_signals ?? 3)} ou mais acionamentos no papel`}
           accent="ember"
         />
         <KpiCard
@@ -257,7 +257,7 @@ function App() {
           <h2>Como ler em 30 segundos</h2>
           <ol>
             <li>Comece pela seção `Ativou agora`.</li>
-            <li>Se o card estiver como `Prioridade`, a ação também passou no backtest individual.</li>
+            <li>O card aparece quando o papel teve confluência de estratégias elite.</li>
             <li>`Entrada` mostra se a estratégia é para abertura ou fechamento.</li>
             <li>`Alvo` e `Stop` são o plano percentual validado no backtest.</li>
           </ol>
@@ -268,7 +268,7 @@ function App() {
             <li>`Média`: lucro médio por trade no backtest.</li>
             <li>`PF`: quanto o padrão ganhou para cada 1 perdido.</li>
             <li>`Acerto`: percentual de operações vencedoras.</li>
-            <li>`Ticker qualificado`: ação com histórico próprio dentro da estratégia.</li>
+            <li>`Confluência`: quantidade de estratégias elite acionadas no mesmo papel.</li>
           </ul>
         </article>
       </section>
@@ -276,15 +276,15 @@ function App() {
       <section className="section-header">
         <div>
           <p className="section-eyebrow">Ativou agora</p>
-          <h2>Ações para olhar primeiro</h2>
+          <h2>Ações com confluência</h2>
         </div>
       </section>
 
       <section className="activated-grid">
         {prioritySignals.length === 0 ? (
           <article className="empty-state">
-            <h3>Nenhuma ação prioritária acionada.</h3>
-            <p>Existem sinais no radar, mas nenhum passou pelo corte individual do ticker neste pregão.</p>
+            <h3>Nenhuma ação com confluência acionada.</h3>
+            <p>Existem sinais no radar, mas nenhum papel atingiu o mínimo de estratégias elite no mesmo pregão.</p>
           </article>
         ) : (
           prioritySignals.map((signal) => (
@@ -321,7 +321,7 @@ function App() {
               </p>
               {signal.confirming_signals_count > 1 ? (
                 <p className="plain-trigger">
-                  <strong>Confirmação:</strong> {signal.confirming_signals_count} estratégias operacionais acionaram este papel; o card mostra a melhor pelo score.
+                  <strong>Confluência:</strong> {signal.confirming_signals_count} estratégias elite acionaram este papel; o card mostra a melhor pelo score.
                 </p>
               ) : null}
 
@@ -333,8 +333,12 @@ function App() {
                 </div>
                 <div>
                   <span>Backtest da ação</span>
-                  <strong>{formatPct(signal.ticker_metrics.average_trade_return_pct)}</strong>
-                  <small>{formatNumber(signal.ticker_metrics.total_trades)} trades | PF {formatPf(signal.ticker_metrics.profit_factor)}</small>
+                  <strong>{signal.ticker_metrics ? formatPct(signal.ticker_metrics.average_trade_return_pct) : "n/a"}</strong>
+                  <small>
+                    {signal.ticker_metrics
+                      ? `${formatNumber(signal.ticker_metrics.total_trades)} trades | PF ${formatPf(signal.ticker_metrics.profit_factor)}`
+                      : "sem filtro individual"}
+                  </small>
                 </div>
               </div>
             </article>
@@ -363,10 +367,10 @@ function App() {
           <label className="toggle">
             <input
               type="checkbox"
-              checked={showQualifiedOnly}
-              onChange={(event) => setShowQualifiedOnly(event.target.checked)}
+              checked={showOperationalOnly}
+              onChange={(event) => setShowOperationalOnly(event.target.checked)}
             />
-            <span>Somente ações qualificadas</span>
+            <span>Somente com confluência</span>
           </label>
         </div>
       </section>
@@ -375,11 +379,11 @@ function App() {
         {filteredSignals.length === 0 ? (
           <article className="empty-state">
             <h3>Nenhum sinal encontrado com o filtro atual.</h3>
-            <p>Se quiser ampliar o radar, desmarque o filtro de ações qualificadas.</p>
+            <p>Se quiser ampliar o radar, desmarque o filtro de confluência.</p>
           </article>
         ) : (
           filteredSignals.map((signal) => (
-            <article key={signal.signal_id} className={`signal-card ${signal.is_qualified_ticker ? "signal-card--qualified" : ""}`}>
+            <article key={signal.signal_id} className={`signal-card ${signal.is_operational_ticker ? "signal-card--qualified" : ""}`}>
               <div className="signal-card-top">
                 <div>
                   <p className="signal-ticker">{signal.ticker}</p>
@@ -419,7 +423,7 @@ function App() {
 
               {signal.ticker_metrics ? (
                 <div className="ticker-chip ticker-chip--good">
-                  <strong>Ticker qualificado</strong>
+                  <strong>Histórico individual no ticker</strong>
                   <span>
                     {formatNumber(signal.ticker_metrics.total_trades)} trades | média {formatPct(signal.ticker_metrics.average_trade_return_pct)} | PF{" "}
                     {formatPf(signal.ticker_metrics.profit_factor)}
@@ -427,8 +431,8 @@ function App() {
                 </div>
               ) : (
                 <div className="ticker-chip">
-                  <strong>Ticker sem qualificação individual</strong>
-                  <span>O sinal existe, mas o papel não passou no corte mínimo por ação.</span>
+                  <strong>Sem filtro individual no ticker</strong>
+                  <span>O acionamento veio da estratégia elite; este papel não tem amostra individual forte nessa estratégia.</span>
                 </div>
               )}
 
@@ -461,7 +465,7 @@ function App() {
               <th>Média</th>
               <th>PF</th>
               <th>Triggers</th>
-              <th>Triggers qualificados</th>
+              <th>Confluência</th>
             </tr>
           </thead>
           <tbody>
@@ -475,7 +479,7 @@ function App() {
                 <td>{formatPct(strategy.metrics.average_trade_return_pct)}</td>
                 <td>{formatPf(strategy.metrics.profit_factor)}</td>
                 <td>{formatNumber(strategy.triggered_count)}</td>
-                <td>{formatNumber(strategy.qualified_triggered_count)}</td>
+                <td>{formatNumber(strategy.operational_triggered_count ?? 0)}</td>
               </tr>
             ))}
           </tbody>
@@ -503,7 +507,7 @@ function App() {
               </div>
             ) : (
               <div className="ticker-card-meta">
-                <span>Sem histórico consolidado qualificado</span>
+                <span>{item.is_operational ? "Confluência operacional" : "Acionamento isolado"}</span>
               </div>
             )}
           </article>

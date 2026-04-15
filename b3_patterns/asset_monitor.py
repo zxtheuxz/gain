@@ -21,6 +21,7 @@ from .tickers import load_tickers
 
 
 JSON_INF_SENTINEL = 9999.0
+OPERATIONAL_MIN_SIGNALS = 3
 
 
 def _parse_float(value: str | None) -> float:
@@ -304,6 +305,57 @@ def build_asset_monitor_payload(
         )
     )
 
+    operational_tickers = {
+        ticker
+        for ticker, count in triggered_ticker_counter.items()
+        if count >= OPERATIONAL_MIN_SIGNALS
+    }
+    for signal in signals:
+        ticker = str(signal["ticker"])
+        signal["ticker_signal_count"] = triggered_ticker_counter[ticker]
+        signal["is_operational_ticker"] = ticker in operational_tickers
+    operational_strategy_counter: Counter[str] = Counter(
+        str(signal["strategy_code"])
+        for signal in signals
+        if signal["is_operational_ticker"]
+    )
+
+    best_operational_by_ticker: dict[str, dict[str, object]] = {}
+    for signal in signals:
+        if not signal["is_operational_ticker"]:
+            continue
+        ticker = str(signal["ticker"])
+        current = best_operational_by_ticker.get(ticker)
+        signal_score = (
+            float(signal["strategy_metrics"]["average_trade_return_pct"]) * 100.0
+            + float(signal["strategy_metrics"]["profitable_trade_rate_pct"]) * 2.0
+            + min(float(signal["strategy_metrics"]["profit_factor"]), 20.0) * 5.0
+            + float(signal["strategy_metrics"]["trades"]) * 0.03
+            + triggered_ticker_counter[ticker] * 25.0
+        )
+        if current is None or signal_score > float(current["operational_score"]):
+            best_operational_by_ticker[ticker] = {
+                "ticker": ticker,
+                "signals": triggered_ticker_counter[ticker],
+                "operational_score": signal_score,
+                "best_signal_id": signal["signal_id"],
+                "best_strategy_code": signal["strategy_code"],
+                "best_strategy_label": signal["strategy_label"],
+                "entry_rule": signal["entry_rule"],
+                "action_label": signal["action_label"],
+                "trade_date": signal["trade_date"],
+                "strategy_metrics": signal["strategy_metrics"],
+                "overall": overall_lookup.get(ticker),
+            }
+    top_operational_tickers = sorted(
+        best_operational_by_ticker.values(),
+        key=lambda item: (
+            -int(item["signals"]),
+            -float(item["operational_score"]),
+            str(item["ticker"]),
+        ),
+    )
+
     strategies_payload = []
     for strategy in sorted(
         strategies,
@@ -335,6 +387,7 @@ def build_asset_monitor_payload(
                 },
                 "triggered_count": triggered_strategy_counter[strategy["code"]],
                 "qualified_triggered_count": qualified_strategy_counter[strategy["code"]],
+                "operational_triggered_count": operational_strategy_counter[strategy["code"]],
             }
         )
 
@@ -347,15 +400,20 @@ def build_asset_monitor_payload(
         "strategies_monitored": len(strategies),
         "signals_triggered": len(signals),
         "signals_triggered_qualified": sum(1 for signal in signals if signal["is_qualified_ticker"]),
+        "operational_min_signals": OPERATIONAL_MIN_SIGNALS,
+        "operational_tickers": len(operational_tickers),
+        "signals_triggered_operational": sum(1 for signal in signals if signal["is_operational_ticker"]),
         "triggered_tickers": len(triggered_ticker_counter),
         "top_triggered_tickers": [
             {
                 "ticker": ticker,
                 "signals": count,
+                "is_operational": ticker in operational_tickers,
                 "overall": overall_lookup.get(ticker),
             }
             for ticker, count in triggered_ticker_counter.most_common(20)
         ],
+        "top_operational_tickers": top_operational_tickers[:20],
         "strategies": strategies_payload,
         "signals": signals,
     }

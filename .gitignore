@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
 *.db
 b3_history.db
 data/
