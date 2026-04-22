@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import math
 from collections import defaultdict
@@ -61,6 +62,22 @@ SHORTLIST_LIMIT = 0  # 0 = sem limite, todas que passam no filtro de qualidade e
 
 # -- Statistical significance --
 SIGNIFICANCE_LEVEL = 0.05
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Gera relatorio estatistico R3 com train/test split e significancia."
+    )
+    parser.add_argument("--approved-csv", default=str(APPROVED_CSV))
+    parser.add_argument("--trades-csv", default=str(TRADES_CSV))
+    parser.add_argument("--final-strategies-csv", default=str(FINAL_STRATEGIES_CSV))
+    parser.add_argument("--final-tickers-csv", default=str(FINAL_TICKERS_CSV))
+    parser.add_argument("--final-actions-csv", default=str(FINAL_ACTIONS_CSV))
+    parser.add_argument("--shortlist-strategies-csv", default=str(SHORTLIST_STRATEGIES_CSV))
+    parser.add_argument("--shortlist-tickers-csv", default=str(SHORTLIST_TICKERS_CSV))
+    parser.add_argument("--shortlist-actions-csv", default=str(SHORTLIST_ACTIONS_CSV))
+    parser.add_argument("--report-md", default=str(REPORT_MD))
+    return parser.parse_args()
 
 
 @dataclass(slots=True)
@@ -225,6 +242,7 @@ def _metrics_row(metrics: Metrics, prefix: str = "") -> dict[str, object]:
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]], fields: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as file_obj:
         writer = csv.DictWriter(file_obj, fieldnames=fields)
         writer.writeheader()
@@ -305,8 +323,19 @@ def _build_action_rows(ticker_rows: list[dict[str, object]]) -> list[dict[str, o
 
 
 def main() -> None:
+    args = parse_args()
+    approved_csv = Path(args.approved_csv)
+    trades_csv = Path(args.trades_csv)
+    final_strategies_csv = Path(args.final_strategies_csv)
+    final_tickers_csv = Path(args.final_tickers_csv)
+    final_actions_csv = Path(args.final_actions_csv)
+    shortlist_strategies_csv = Path(args.shortlist_strategies_csv)
+    shortlist_tickers_csv = Path(args.shortlist_tickers_csv)
+    shortlist_actions_csv = Path(args.shortlist_actions_csv)
+    report_md = Path(args.report_md)
+
     approved_rows: dict[str, dict[str, object]] = {}
-    with APPROVED_CSV.open(encoding="utf-8", newline="") as file_obj:
+    with approved_csv.open(encoding="utf-8", newline="") as file_obj:
         for row in csv.DictReader(file_obj):
             parsed: dict[str, object] = dict(row)
             for key in [
@@ -332,7 +361,7 @@ def main() -> None:
     ticker_metrics: dict[tuple[str, str], Metrics] = defaultdict(Metrics)
     ticker_dates: dict[tuple[str, str], dict[str, str]] = defaultdict(lambda: {"first_trade_date": "", "last_trade_date": ""})
 
-    with TRADES_CSV.open(encoding="utf-8", newline="") as file_obj:
+    with trades_csv.open(encoding="utf-8", newline="") as file_obj:
         for row in csv.DictReader(file_obj):
             strategy_code = row["strategy_code"]
             trade_return = _float(row["trade_return_pct"])
@@ -526,12 +555,12 @@ def main() -> None:
         "score", "best_strategy_label",
     ]
 
-    _write_csv(FINAL_STRATEGIES_CSV, final_strategies, strategy_fields)
-    _write_csv(FINAL_TICKERS_CSV, ticker_rows, ticker_fields)
-    _write_csv(FINAL_ACTIONS_CSV, action_rows, action_fields)
-    _write_csv(SHORTLIST_STRATEGIES_CSV, shortlist_strategies, strategy_fields)
-    _write_csv(SHORTLIST_TICKERS_CSV, shortlist_ticker_rows, ticker_fields)
-    _write_csv(SHORTLIST_ACTIONS_CSV, shortlist_action_rows, action_fields)
+    _write_csv(final_strategies_csv, final_strategies, strategy_fields)
+    _write_csv(final_tickers_csv, ticker_rows, ticker_fields)
+    _write_csv(final_actions_csv, action_rows, action_fields)
+    _write_csv(shortlist_strategies_csv, shortlist_strategies, strategy_fields)
+    _write_csv(shortlist_tickers_csv, shortlist_ticker_rows, ticker_fields)
+    _write_csv(shortlist_actions_csv, shortlist_action_rows, action_fields)
 
     lines = [
         "# Rodada 3 - Relatorio Operacional (com train/test split e significancia)",
@@ -540,7 +569,7 @@ def main() -> None:
         "",
         "## Corte final",
         "",
-        "- A estrategia ja veio do discovery com no minimo 60% de lucro, 60% de alvo batido, media >= 1%, PF >= 2, 200 trades e 20 acoes.",
+        "- A estrategia ja veio do discovery bruto com os filtros configurados na execucao original.",
         f"- **Train/test split**: treino ate `{TRAIN_END_DATE}`, teste desde `{TEST_START_DATE}`.",
         f"  - Treino: trades >= {TRAIN_MIN_TRADES}, alvo >= {TRAIN_MIN_TARGET_HIT_RATE:.0f}%, green >= {TRAIN_MIN_PROFITABLE_RATE:.0f}%, media >= {TRAIN_MIN_AVG_RETURN:.1f}%, PF >= {TRAIN_MIN_PF:.1f}.",
         f"  - Teste: trades >= {TEST_MIN_TRADES}, alvo >= {TEST_MIN_TARGET_HIT_RATE:.0f}%, green >= {TEST_MIN_PROFITABLE_RATE:.0f}%, media >= {TEST_MIN_AVG_RETURN:.1f}%, PF >= {TEST_MIN_PF:.1f}.",
@@ -564,8 +593,8 @@ def main() -> None:
     ]
     for row in final_strategies[:30]:
         lines.append(
-            f"| {row['label']} | {row['trades']} | {row['tickers']} | {float(row['target_pct']):.0f}% | "
-            f"{float(row['stop_pct']):.0f}% | {row['time_cap_days']}D | {float(row['take_profit_rate_pct']):.2f}% | "
+            f"| {row['label']} | {row['trades']} | {row['tickers']} | {float(row['target_pct']):.2f}% | "
+            f"{float(row['stop_pct']):.2f}% | {row['time_cap_days']}D | {float(row['take_profit_rate_pct']):.2f}% | "
             f"{float(row['profitable_rate_pct']):.2f}% | {float(row['average_trade_return_pct']):.2f}% | "
             f"{_fmt(float(row['profit_factor']), 2)} | {float(row['validation_take_profit_rate_pct']):.2f}% | "
             f"{float(row['validation_average_trade_return_pct']):.2f}% |"
@@ -582,19 +611,20 @@ def main() -> None:
     lines.extend(["", "## Shortlist operacional", ""])
     for index, row in enumerate(shortlist_strategies, 1):
         lines.append(
-            f"{index}. alvo `{float(row['target_pct']):.0f}%` / stop `{float(row['stop_pct']):.0f}%` / cap `{row['time_cap_days']}D` | "
+            f"{index}. alvo `{float(row['target_pct']):.2f}%` / stop `{float(row['stop_pct']):.2f}%` / cap `{row['time_cap_days']}D` | "
             f"alvo batido `{float(row['take_profit_rate_pct']):.2f}%` | validacao alvo `{float(row['validation_take_profit_rate_pct']):.2f}%` | "
             f"media `{float(row['average_trade_return_pct']):.2f}%` | {row['label']}"
         )
 
     lines.extend(["", "## Arquivos", ""])
-    lines.append(f"- Estrategias finais: `{FINAL_STRATEGIES_CSV.relative_to(ROOT)}`")
-    lines.append(f"- Acoes por estrategia: `{FINAL_TICKERS_CSV.relative_to(ROOT)}`")
-    lines.append(f"- Acoes consolidadas: `{FINAL_ACTIONS_CSV.relative_to(ROOT)}`")
-    lines.append(f"- Shortlist estrategias: `{SHORTLIST_STRATEGIES_CSV.relative_to(ROOT)}`")
-    lines.append(f"- Shortlist acoes por estrategia: `{SHORTLIST_TICKERS_CSV.relative_to(ROOT)}`")
-    lines.append(f"- Shortlist acoes consolidadas: `{SHORTLIST_ACTIONS_CSV.relative_to(ROOT)}`")
-    REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines.append(f"- Estrategias finais: `{final_strategies_csv}`")
+    lines.append(f"- Acoes por estrategia: `{final_tickers_csv}`")
+    lines.append(f"- Acoes consolidadas: `{final_actions_csv}`")
+    lines.append(f"- Shortlist estrategias: `{shortlist_strategies_csv}`")
+    lines.append(f"- Shortlist acoes por estrategia: `{shortlist_tickers_csv}`")
+    lines.append(f"- Shortlist acoes consolidadas: `{shortlist_actions_csv}`")
+    report_md.parent.mkdir(parents=True, exist_ok=True)
+    report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print(f"final_strategies={len(final_strategies)}")
     print(f"final_tickers={len(ticker_rows)}")
@@ -602,7 +632,7 @@ def main() -> None:
     print(f"shortlist_strategies={len(shortlist_strategies)}")
     print(f"shortlist_tickers={len(shortlist_ticker_rows)}")
     print(f"shortlist_actions={len(shortlist_action_rows)}")
-    print(REPORT_MD)
+    print(report_md)
 
 
 if __name__ == "__main__":

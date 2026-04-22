@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -112,6 +113,51 @@ class _PatternAccumulator:
     exit_mode: str = "percent"
     atr_target_mult: float = 0.0
     atr_stop_mult: float = 0.0
+
+
+@dataclass(slots=True)
+class _TickerTradeAccumulator:
+    strategy_code: str
+    strategy_label: str
+    family: str
+    ticker: str
+    total_trades: int = 0
+    successful_trades: int = 0
+    profitable_trades: int = 0
+    sum_trade_return_pct: float = 0.0
+    gross_profit_pct: float = 0.0
+    gross_loss_pct: float = 0.0
+    log_cumulative_multiplier: float = 0.0
+    zero_cumulative_multiplier: bool = False
+    first_trade_date: str | None = None
+    last_trade_date: str | None = None
+
+    def update(
+        self,
+        *,
+        trade_return_pct: float,
+        is_successful: bool,
+        is_profitable: bool,
+        trigger_date: str,
+    ) -> None:
+        self.total_trades += 1
+        if is_successful:
+            self.successful_trades += 1
+        if is_profitable:
+            self.profitable_trades += 1
+            self.gross_profit_pct += trade_return_pct
+        elif trade_return_pct < 0:
+            self.gross_loss_pct += abs(trade_return_pct)
+        self.sum_trade_return_pct += trade_return_pct
+        multiplier = 1.0 + (trade_return_pct / 100.0)
+        if multiplier <= 0:
+            self.zero_cumulative_multiplier = True
+        else:
+            self.log_cumulative_multiplier += log(multiplier)
+        if self.first_trade_date is None or trigger_date < self.first_trade_date:
+            self.first_trade_date = trigger_date
+        if self.last_trade_date is None or trigger_date > self.last_trade_date:
+            self.last_trade_date = trigger_date
 
 
 FEATURE_LIBRARY: list[AssetDiscoveryFeature] = [
@@ -1864,6 +1910,211 @@ def collect_asset_discovery_pattern_trades(
                 )
             )
     return sorted(trades, key=lambda item: (item.strategy_code, item.trigger_date, item.ticker))
+
+
+def collect_asset_discovery_pattern_trades_to_csv(
+    *,
+    db_path: str | Path,
+    tickers_file: str | Path,
+    start_date: str,
+    end_date: str,
+    approved_summaries: list[AssetDiscoveryPatternSummary],
+    output_path: str | Path,
+    template_definitions: list[AssetDiscoveryTemplate] | None = None,
+    max_pattern_size: int = 2,
+    progress_callback: Callable[[dict[str, object]], None] | None = None,
+) -> list[StrategyTickerSummary]:
+    effective_templates = template_definitions or build_asset_discovery_round1_templates()
+    approved_by_code = {item.code: item for item in approved_summaries}
+    if not approved_by_code:
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as file_obj:
+            writer = csv.DictWriter(
+                file_obj,
+                fieldnames=[
+                    "strategy_code",
+                    "strategy_label",
+                    "family",
+                    "ticker",
+                    "trigger_date",
+                    "exit_date",
+                    "direction",
+                    "trigger_change_pct",
+                    "entry_price",
+                    "exit_price",
+                    "asset_move_pct",
+                    "trade_return_pct",
+                    "is_profitable",
+                    "is_successful",
+                    "instrument_symbol",
+                    "contract_expiration",
+                    "dte_target_days",
+                    "exit_reason",
+                ],
+            )
+            writer.writeheader()
+        return []
+
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ticker_accumulators: dict[tuple[str, str], _TickerTradeAccumulator] = {}
+    pattern_items_cache: dict[tuple[tuple[tuple[str, str, str], ...], int], list[tuple[tuple[str, str, str], ...]]] = {}
+    identity_cache: dict[tuple[str, tuple[tuple[str, str, str], ...]], str] = {}
+    started_at = monotonic()
+    total_trades = 0
+
+    def _handle_iter_progress(progress: dict[str, object]) -> None:
+        if progress_callback is None:
+            return
+        payload = dict(progress)
+        payload["stage"] = "trades"
+        payload["elapsed_seconds"] = monotonic() - started_at
+        payload["approved_patterns"] = len(approved_by_code)
+        payload["trades"] = total_trades
+        progress_callback(payload)
+
+    with path.open("w", encoding="utf-8", newline="") as file_obj:
+        writer = csv.DictWriter(
+            file_obj,
+            fieldnames=[
+                "strategy_code",
+                "strategy_label",
+                "family",
+                "ticker",
+                "trigger_date",
+                "exit_date",
+                "direction",
+                "trigger_change_pct",
+                "entry_price",
+                "exit_price",
+                "asset_move_pct",
+                "trade_return_pct",
+                "is_profitable",
+                "is_successful",
+                "instrument_symbol",
+                "contract_expiration",
+                "dte_target_days",
+                "exit_reason",
+            ],
+        )
+        writer.writeheader()
+
+        for sample in _iter_asset_samples(
+            db_path=db_path,
+            tickers_file=tickers_file,
+            start_date=start_date,
+            end_date=end_date,
+            template_definitions=effective_templates,
+            progress_callback=_handle_iter_progress,
+        ):
+            feature_signature = tuple(
+                (feature.key, *sample["feature_states"][feature.key])
+                for feature in FEATURE_LIBRARY
+                if feature.key in sample["feature_states"]
+            )
+            pattern_cache_key = (feature_signature, max_pattern_size)
+            pattern_items_list = pattern_items_cache.get(pattern_cache_key)
+            if pattern_items_list is None:
+                pattern_items_list = _pattern_items(sample["feature_states"], max_pattern_size=max_pattern_size)
+                pattern_items_cache[pattern_cache_key] = pattern_items_list
+
+            for pattern_items in pattern_items_list:
+                identity_cache_key = (sample["template"].code, pattern_items)
+                code = identity_cache.get(identity_cache_key)
+                if code is None:
+                    code, _, _, _ = _build_pattern_identity(sample["template"], pattern_items)
+                    identity_cache[identity_cache_key] = code
+                summary = approved_by_code.get(code)
+                if summary is None:
+                    continue
+
+                trade_return_pct = sample["trade_return_pct"]
+                is_profitable = trade_return_pct > 0
+                is_successful = trade_return_pct >= summary.min_trade_return_pct
+                writer.writerow(
+                    {
+                        "strategy_code": summary.code,
+                        "strategy_label": summary.label,
+                        "family": summary.family,
+                        "ticker": sample["ticker"],
+                        "trigger_date": sample["trade_date"],
+                        "exit_date": sample["exit_date"],
+                        "direction": summary.trade_direction,
+                        "trigger_change_pct": f"{sample['trigger_change_pct']:.4f}",
+                        "entry_price": f"{sample['entry_price']:.4f}",
+                        "exit_price": f"{sample['exit_price']:.4f}",
+                        "asset_move_pct": f"{sample['asset_move_pct']:.4f}",
+                        "trade_return_pct": f"{trade_return_pct:.4f}",
+                        "is_profitable": is_profitable,
+                        "is_successful": is_successful,
+                        "instrument_symbol": "",
+                        "contract_expiration": "",
+                        "dte_target_days": "",
+                        "exit_reason": sample["exit_reason"] or "",
+                    }
+                )
+                total_trades += 1
+                if total_trades % 100000 == 0:
+                    file_obj.flush()
+
+                accumulator_key = (summary.code, sample["ticker"])
+                accumulator = ticker_accumulators.get(accumulator_key)
+                if accumulator is None:
+                    accumulator = _TickerTradeAccumulator(
+                        strategy_code=summary.code,
+                        strategy_label=summary.label,
+                        family=summary.family,
+                        ticker=sample["ticker"],
+                    )
+                    ticker_accumulators[accumulator_key] = accumulator
+                accumulator.update(
+                    trade_return_pct=trade_return_pct,
+                    is_successful=is_successful,
+                    is_profitable=is_profitable,
+                    trigger_date=sample["trade_date"],
+                )
+
+    summaries: list[StrategyTickerSummary] = []
+    for accumulator in ticker_accumulators.values():
+        total = accumulator.total_trades
+        average_trade_return_pct = accumulator.sum_trade_return_pct / total if total else 0.0
+        cumulative_return_pct = -100.0 if accumulator.zero_cumulative_multiplier else (exp(accumulator.log_cumulative_multiplier) - 1.0) * 100.0
+        summaries.append(
+            StrategyTickerSummary(
+                strategy_code=accumulator.strategy_code,
+                strategy_label=accumulator.strategy_label,
+                family=accumulator.family,
+                ticker=accumulator.ticker,
+                total_trades=total,
+                successful_trades=accumulator.successful_trades,
+                success_rate_pct=(accumulator.successful_trades / total) * 100.0 if total else 0.0,
+                profitable_trades=accumulator.profitable_trades,
+                profitable_trade_rate_pct=(accumulator.profitable_trades / total) * 100.0 if total else 0.0,
+                average_trade_return_pct=average_trade_return_pct,
+                # Streaming mode avoids retaining every trade in memory; keep the field populated
+                # with the average so downstream CSV/export code remains compatible.
+                median_trade_return_pct=average_trade_return_pct,
+                net_trade_return_pct=accumulator.sum_trade_return_pct,
+                cumulative_return_pct=cumulative_return_pct,
+                profit_factor=_calculate_profit_factor(
+                    accumulator.gross_profit_pct,
+                    accumulator.gross_loss_pct,
+                ),
+                first_trade_date=accumulator.first_trade_date or "",
+                last_trade_date=accumulator.last_trade_date or "",
+            )
+        )
+
+    return sorted(
+        summaries,
+        key=lambda item: (
+            item.net_trade_return_pct,
+            item.average_trade_return_pct,
+            item.total_trades,
+        ),
+        reverse=True,
+    )
 
 
 def render_asset_discovery_report(results: list[AssetDiscoveryPatternSummary], top: int = 20) -> str:

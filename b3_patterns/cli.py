@@ -18,6 +18,7 @@ from .asset_discovery_round1 import (
     build_asset_discovery_registry_entries,
     build_asset_discovery_round1_templates,
     collect_asset_discovery_pattern_trades,
+    collect_asset_discovery_pattern_trades_to_csv,
     default_asset_discovery_window,
     export_asset_discovery_csv,
     export_asset_discovery_markdown,
@@ -2088,39 +2089,12 @@ def _run_asset_discovery_r3(args: argparse.Namespace) -> int:
         require_positive_net=True,
     )
 
-    approved_trades = collect_asset_discovery_pattern_trades(
-        db_path=db_path,
-        tickers_file=args.tickers_file,
-        start_date=start_date,
-        end_date=end_date,
-        approved_summaries=approved_results,
-        template_definitions=all_templates,
-        max_pattern_size=3,
-        progress_callback=_print_progress,
-    )
-
     new_registry_entries = build_asset_discovery_registry_entries(
         approved_results,
         rejected_results,
         rejection_reasons,
     )
     merged_registry_entries = merge_registry_entries(existing_registry_entries, new_registry_entries)
-    ticker_summaries = summarize_trades_by_ticker(approved_trades)
-    qualified_ticker_summaries = filter_strategy_ticker_results(
-        summaries=ticker_summaries,
-        min_success_rate_pct=args.ticker_min_success_rate,
-        min_profit_factor=args.ticker_min_profit_factor,
-        min_average_trade_return_pct=args.ticker_min_average_trade_return_pct,
-        min_trades=args.ticker_min_trades,
-        require_positive_net=True,
-    )
-
-    print(render_asset_discovery_report(approved_results, top=args.top))
-    sizes = {s.state_size for s in summaries}
-    print(
-        f"R3 resultado | padroes brutos: {len(summaries)} | aprovados: {len(approved_results)} | "
-        f"reprovados: {len(rejected_results)} | tamanhos: {sorted(sizes)}"
-    )
 
     if args.output_csv:
         export_asset_discovery_csv(approved_results, args.output_csv)
@@ -2128,15 +2102,6 @@ def _run_asset_discovery_r3(args: argparse.Namespace) -> int:
     if args.rejected_csv:
         export_asset_discovery_csv(rejected_results, args.rejected_csv)
         print(f"CSV reprovados: {args.rejected_csv}")
-    if args.trades_csv:
-        export_strategy_trades_csv(approved_trades, args.trades_csv)
-        print(f"Log de trades: {args.trades_csv}")
-    if args.ticker_summary_csv:
-        export_strategy_ticker_csv(ticker_summaries, args.ticker_summary_csv)
-        print(f"Resumo por acao: {args.ticker_summary_csv}")
-    if args.ticker_qualified_csv:
-        export_strategy_ticker_csv(qualified_ticker_summaries, args.ticker_qualified_csv)
-        print(f"Resumo qualificado por acao: {args.ticker_qualified_csv}")
     if args.registry_csv:
         export_strategy_registry_csv(merged_registry_entries, args.registry_csv)
         print(f"Registro: {args.registry_csv}")
@@ -2154,6 +2119,55 @@ def _run_asset_discovery_r3(args: argparse.Namespace) -> int:
             templates=all_templates,
         )
         print(f"Resumo MD: {args.summary_md}")
+
+    if args.trades_csv:
+        ticker_summaries = collect_asset_discovery_pattern_trades_to_csv(
+            db_path=db_path,
+            tickers_file=args.tickers_file,
+            start_date=start_date,
+            end_date=end_date,
+            approved_summaries=approved_results,
+            output_path=args.trades_csv,
+            template_definitions=all_templates,
+            max_pattern_size=3,
+            progress_callback=_print_progress,
+        )
+        print(f"Log de trades: {args.trades_csv}")
+    else:
+        approved_trades = collect_asset_discovery_pattern_trades(
+            db_path=db_path,
+            tickers_file=args.tickers_file,
+            start_date=start_date,
+            end_date=end_date,
+            approved_summaries=approved_results,
+            template_definitions=all_templates,
+            max_pattern_size=3,
+            progress_callback=_print_progress,
+        )
+        ticker_summaries = summarize_trades_by_ticker(approved_trades)
+
+    qualified_ticker_summaries = filter_strategy_ticker_results(
+        summaries=ticker_summaries,
+        min_success_rate_pct=args.ticker_min_success_rate,
+        min_profit_factor=args.ticker_min_profit_factor,
+        min_average_trade_return_pct=args.ticker_min_average_trade_return_pct,
+        min_trades=args.ticker_min_trades,
+        require_positive_net=True,
+    )
+
+    print(render_asset_discovery_report(approved_results, top=args.top))
+    sizes = {s.state_size for s in summaries}
+    print(
+        f"R3 resultado | padroes brutos: {len(summaries)} | aprovados: {len(approved_results)} | "
+        f"reprovados: {len(rejected_results)} | tamanhos: {sorted(sizes)}"
+    )
+
+    if args.ticker_summary_csv:
+        export_strategy_ticker_csv(ticker_summaries, args.ticker_summary_csv)
+        print(f"Resumo por acao: {args.ticker_summary_csv}")
+    if args.ticker_qualified_csv:
+        export_strategy_ticker_csv(qualified_ticker_summaries, args.ticker_qualified_csv)
+        print(f"Resumo qualificado por acao: {args.ticker_qualified_csv}")
 
     return 0
 
