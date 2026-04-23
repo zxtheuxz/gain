@@ -105,6 +105,67 @@ npm install
 npm run dev
 ```
 
+## Campanha VPS: 41 estrategias de alta precisao
+
+Esta VPS foi usada para a parte pesada da campanha R3 com alvos fracionados entre `1.0%` e `1.4%`, usando bastante RAM para mineracao `2f -> 3f`. O objetivo final nao foi manter o bruto inteiro, e sim extrair uma cesta enxuta com foco em **alta taxa de acerto**.
+
+### O que saiu desta campanha
+
+- Base operacional final: [reports/operational-high-precision-41.csv](reports/operational-high-precision-41.csv)
+- Resumo legivel da cesta: [reports/operational-high-precision-41.md](reports/operational-high-precision-41.md)
+- Trades reconstruidos de abril/2026 para essa cesta: [reports/operational-high-precision-41-apr2026-trades.csv](reports/operational-high-precision-41-apr2026-trades.csv)
+- Sinais encontrados em `2026-04-22`: [reports/operational-high-precision-41-signals-2026-04-22.csv](reports/operational-high-precision-41-signals-2026-04-22.csv)
+
+### Como a cesta de 41 foi filtrada
+
+O ponto de partida foi o bloco bruto aprovado em:
+
+- [reports/cap5_t10_14-approved.csv](reports/cap5_t10_14-approved.csv)
+
+Depois disso, o recorte de alta precisao ficou em:
+
+- `occurrences >= 200`
+- `tickers >= 50`
+- `success >= 90%`
+- `take profit >= 90%`
+- `stop loss rate <= 8%`
+- `profit factor >= 2.0`
+- `avg trade >= 0.45%`
+
+Arquivos intermediarios importantes:
+
+- Filtro de alta precisao: [reports/cap5_t10_14-high-precision.csv](reports/cap5_t10_14-high-precision.csv)
+- Resumo do filtro: [reports/cap5_t10_14-high-precision.md](reports/cap5_t10_14-high-precision.md)
+- Script de corte do bloco bruto: [tools/filter_asset_r3_block_approved.py](tools/filter_asset_r3_block_approved.py)
+
+### Como continuar em outra maquina
+
+1. Clonar o repositorio e instalar o ambiente Python.
+2. Recriar ou copiar o `b3_history.db`.
+3. Sincronizar o banco com o universo operacional:
+
+```bash
+python -m b3_patterns sync --tickers-file lista.md
+```
+
+4. Trabalhar diretamente com a cesta final:
+
+- [reports/operational-high-precision-41.csv](reports/operational-high-precision-41.csv)
+- [reports/operational-high-precision-41.md](reports/operational-high-precision-41.md)
+
+### Observacao importante sobre sinais atuais
+
+O monitor legado em `asset_monitor.py` ainda le `spot_quote_history`. Se o banco tiver sido atualizado apenas com `sync`, a tabela mais fresca sera `price_history`. Para sinais atuais da cesta de 41, use os arquivos desta campanha ou recalcule em cima de `price_history`.
+
+### Onde olhar para entender mais
+
+- Runner pesado da campanha: [tools/run_asset_r3_fine_targets_tmux.sh](tools/run_asset_r3_fine_targets_tmux.sh)
+- Coleta de trades em streaming: [b3_patterns/asset_discovery_round1.py](b3_patterns/asset_discovery_round1.py)
+- Orquestracao R3: [b3_patterns/cli.py](b3_patterns/cli.py)
+- Pos-processamento estatistico: [tools/generate_asset_r3_stat_report.py](tools/generate_asset_r3_stat_report.py)
+- Filtro de alta acuracia: [tools/filter_asset_r3_high_accuracy.py](tools/filter_asset_r3_high_accuracy.py)
+- Merge de CSVs por cabecalho: [tools/merge_csv_by_header.py](tools/merge_csv_by_header.py)
+
 Manter o JSON do dashboard sendo reexportado em loop local:
 
 ```powershell
