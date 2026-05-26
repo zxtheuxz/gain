@@ -91,15 +91,27 @@ tmux attach -t r11
 - `*-report.md` — top 30 humano com walk-forward
 - `*-oos-report.md` — performance honesta no OOS (nunca usado para filtrar)
 
-**Escolha de modo por RAM disponivel:**
+**Escolha de modo por RAM e vCPU:**
 
-| RAM disponivel | vCPUs | Modo |
-|---|---|---|
-| < 64 GB | qualquer | Nao rode R10/R11; RAM insuficiente |
-| 64-127 GB | qualquer | Paralelo funciona mas com margem apertada |
-| 128+ GB | 8+ | **Paralelo** (recomendado) — `run_r10_parallel.sh` |
+| RAM disponivel | vCPUs | WORKERS | Tempo R10 | Tempo R11 |
+|---|---|---|---|---|
+| < 64 GB | qualquer | — | Nao rode; RAM insuficiente | — |
+| 64-127 GB | qualquer | 8 | ~120 min | ~150 min |
+| 128 GB | 8 | **8** | ~90-120 min | ~90-150 min |
+| 128 GB | 16+ | 16 | ~60-80 min | ~60-90 min |
+| 192+ GB | 24+ | 24 | ~30-40 min | ~30-60 min |
 
-Cada worker usa ~30 GB de RAM no pico. Com 24 workers em 128 GB, ha margem confortavel.
+**VPS atual: 8 vCPUs / 128 GB** — usar `WORKERS=8`, rodar R10 e R11 **sequencialmente** (nao ao mesmo tempo).
+
+```bash
+# R10 primeiro
+WORKERS=8 bash R10/run_r10_parallel.sh
+
+# Depois, R11
+WORKERS=8 bash R11/run_r11_parallel.sh
+```
+
+Regra geral: `WORKERS` = numero de vCPUs. Mais workers que vCPUs so adiciona overhead de context-switch sem ganho real.
 
 **Validate R11 grande (>10M linhas):** usar `R11/tools/validate_r11_fast.py`
 (pandas vetorizado) em vez de `validate_r11.py` (csv puro). Escala 10-100x melhor.
