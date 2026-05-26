@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+*.db
+b3_history.db
+b3_history.db.bak-*
+data/
+.tmp-tests/
+.claude/
+
+# Local secrets (never commit)
+sinais-operacional/telegram-secrets.json

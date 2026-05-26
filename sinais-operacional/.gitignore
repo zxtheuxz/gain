@@ -1,0 +1,4 @@
+# Secrets reais NUNCA sao commitados (use telegram-secrets.example.json como modelo)
+telegram-secrets.json
+__pycache__/
+*.pyc
